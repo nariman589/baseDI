@@ -1,0 +1,25 @@
+FROM jnexus.tsb.kz:8443/node:16-alpine as build-stage
+WORKDIR /app
+COPY package*.json /app/
+RUN npm config set registry https://jnexus.tsb.kz/repository/npm-proxy/
+RUN npm set strict-ssl false
+RUN npm ci
+COPY ./ /app/
+RUN npm run build:staging
+
+FROM jnexus.tsb.kz:8443/nginx:alpine
+COPY nginx/staging/nginx.conf /etc/nginx/conf.d
+WORKDIR /usr/share/nginx/html
+RUN rm -rf ./*
+COPY --from=build-stage /app/build .
+
+RUN chown -R nginx:nginx /usr/share/nginx/html && chmod -R 755 /usr/share/nginx/html && \
+    chown -R nginx:nginx /var/cache/nginx && \
+    chown -R nginx:nginx /var/log/nginx && \
+    chown -R nginx:nginx /etc/nginx/conf.d
+RUN touch /var/run/nginx.pid && \
+    chown -R nginx:nginx /var/run/nginx.pid
+
+USER nginx
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

@@ -1,0 +1,216 @@
+stages:
+  - setup
+  - build
+  - clean
+
+before_script:
+  - docker -v
+
+pre-setup-job:
+  stage: setup
+  tags:
+    - stagging-runner
+  only:
+    - preprod
+  allow_failure: true
+  script:
+    - docker image tag regulations-image:previous regulations-image:old
+
+setup-job:
+  stage: setup
+  tags:
+    - stagging-runner
+  only:
+    - preprod
+  needs:
+    - pre-setup-job
+  allow_failure: true
+  script:
+    - docker image tag regulations-image:latest regulations-image:previous
+
+build-job:
+  stage: build
+  tags:
+    - stagging-runner
+  only:
+    - preprod
+  needs:
+    - setup-job
+  script:
+    - docker build -t regulations-image:latest -f Dockerfile .
+
+stop-job:
+  stage: build
+  tags:
+    - stagging-runner
+  only:
+    - preprod
+  needs:
+    - build-job
+  allow_failure: true
+  script:
+    - docker container stop regulations-container
+    - docker container rm regulations-container
+
+deploy-job:
+  stage: build
+  tags:
+    - stagging-runner
+  only:
+    - preprod
+  needs:
+    - stop-job
+  script:
+    - docker run -d --restart unless-stopped -p 8089:80 --name regulations-container regulations-image:latest
+
+clean-job:
+  stage: clean
+  tags:
+    - stagging-runner
+  only:
+    - preprod
+  allow_failure: true
+  needs:
+    - deploy-job
+  script:
+    - docker rmi regulations-image:old
+
+production-pre-setup-job:
+  stage: setup
+  tags:
+    - production-runner
+  only:
+    - main
+  allow_failure: true
+  script:
+    - docker image tag production-regulations-image:previous production-regulations-image:old
+
+production-setup-job:
+  stage: setup
+  tags:
+    - production-runner
+  only:
+    - main
+  needs:
+    - production-pre-setup-job
+  allow_failure: true
+  script:
+    - docker image tag production-regulations-image:latest production-regulations-image:previous
+
+production-build-job:
+  stage: build
+  tags:
+    - production-runner
+  only:
+    - main
+  needs:
+    - production-setup-job
+  script:
+    - docker build -t production-regulations-image:latest -f Dockerfile.prod .
+
+production-stop-job:
+  stage: build
+  tags:
+    - production-runner
+  only:
+    - main
+  needs:
+    - production-build-job
+  allow_failure: true
+  script:
+    - docker container stop production-regulations-container
+    - docker container rm production-regulations-container
+
+production-deploy-job:
+  stage: build
+  tags:
+    - production-runner
+  only:
+    - main
+  needs:
+    - production-stop-job
+  script:
+    - docker run -d --restart unless-stopped -p 8089:80 --name production-regulations-container production-regulations-image:latest
+
+production-clean-job:
+  stage: clean
+  tags:
+    - production-runner
+  only:
+    - main
+  allow_failure: true
+  needs:
+    - production-deploy-job
+  script:
+    - docker rmi production-regulations-image:old
+    - docker rmi $(docker images --filter "dangling=true" -q --no-trunc)
+
+production-production-97.33-setup-job:
+  stage: setup
+  tags:
+    - production-runner-97.33
+  only:
+    - main
+  allow_failure: true
+  script:
+    - docker image tag production-regulations-image:previous production-regulations-image:old
+
+production-97.33-setup-job:
+  stage: setup
+  tags:
+    - production-runner-97.33
+  only:
+    - main
+  needs:
+    - production-production-97.33-setup-job
+  allow_failure: true
+  script:
+    - docker image tag production-regulations-image:latest production-regulations-image:previous
+
+production-97.33-build-job:
+  stage: build
+  tags:
+    - production-runner-97.33
+  only:
+    - main
+  needs:
+    - production-97.33-setup-job
+  script:
+    - docker build -t production-regulations-image:latest -f Dockerfile.prod .
+
+production-97.33-stop-job:
+  stage: build
+  tags:
+    - production-runner-97.33
+  only:
+    - main
+  needs:
+    - production-97.33-build-job
+  allow_failure: true
+  script:
+    - docker container stop production-regulations-container
+    - docker container rm production-regulations-container
+
+production-97.33-deploy-job:
+  stage: build
+  tags:
+    - production-runner-97.33
+  only:
+    - main
+  needs:
+    - production-97.33-stop-job
+  script:
+    - docker run -d --restart unless-stopped -p 8081:80 --name production-regulations-container production-regulations-image:latest
+
+production-97.33-clean-job:
+  stage: clean
+  tags:
+    - production-runner-97.33
+  only:
+    - main
+  allow_failure: true
+  needs:
+    - production-97.33-deploy-job
+  script:
+    - docker rmi production-regulations-image:old
+    - docker rmi $(docker images --filter "dangling=true" -q --no-trunc)
